@@ -1,0 +1,16 @@
+[package]
+name = "wasm-runner"
+version = "0.1.0"
+authors = ["Garrett Gu <gu@utexas.edu>"]
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+wasmtime = { path = "../wasmtime/crates/wasmtime", version = "0.21.0", default-features = false, features = ['cache', 'wat'] }
+anyhow = "1.0.19"
+
+[[bin]]
+name = "wasm-runner"
+path = "src/main.rs"
+doc = false
