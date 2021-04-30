@@ -1,4 +1,4 @@
-use criterion::{black_box, criterion_group, criterion_main, Criterion};
+use criterion::{criterion_group, criterion_main, Criterion};
 use wasmtime::*;
 use byteorder::ByteOrder;
 use rand::Rng;
@@ -45,9 +45,9 @@ macro_rules! sha256 {
                 .get0::<()>().unwrap();
             
             b.iter(|| {
-                init();
-                update(4096);
-                fin();
+                init().expect("init failed");
+                update(4096).expect("update failed");
+                fin().expect("final failed");
             })
         });
     }
@@ -59,7 +59,7 @@ macro_rules! salsa20 {
             let store = Store::default();
 
             let module = Module::new(store.engine(), $code).unwrap();
-            let memory = Memory::new(&store, MemoryType::new(Limits::new(1, None)));
+            let memory = Memory::new(&store, MemoryType::new(Limits::new(2, None)));
 
             let mut k: [u32; 8] = [0; 8];
             let mut nonce: [u32; 2] = [0; 2];
@@ -95,9 +95,9 @@ macro_rules! salsa20 {
                 .get1::<u32, ()>().unwrap();
             
             b.iter(|| {
-                keysetup(k[0], k[1], k[2], k[3], k[4], k[5], k[6], k[7]);
-                noncesetup(nonce[0], nonce[1]);
-                encrypt(4096);
+                keysetup(k[0], k[1], k[2], k[3], k[4], k[5], k[6], k[7]).expect("keysetup failed");
+                noncesetup(nonce[0], nonce[1]).expect("noncesetup failed");
+                encrypt(4096).expect("encrypt failed");
             })
         });
     }
