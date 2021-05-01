@@ -1,10 +1,6 @@
 use wasmtime::*;
 use anyhow::Result;
 
-fn sha256(secret: bool) {
-
-}
-
 fn main() -> Result<()> {
     // All wasm objects operate within the context of a "store"
     let store = Store::default();

@@ -1,11 +1,11 @@
-use criterion::{criterion_group, criterion_main, Criterion};
+use criterion::{criterion_group, criterion_main, Criterion, BenchmarkId};
 use wasmtime::*;
 use byteorder::ByteOrder;
 use rand::Rng;
 
 macro_rules! sha256 {
-    ($c:ident, $name:expr, $code:expr) => {
-        $c.bench_function($name, |b| {
+    ($grp:ident, $name:expr, $code:expr, $itrs:expr) => {
+        $grp.bench_with_input(BenchmarkId::new($name, $itrs), $itrs, |b, itrs| {
             let store = Store::default();
 
             let module = Module::new(store.engine(), $code).unwrap();
@@ -46,7 +46,9 @@ macro_rules! sha256 {
             
             b.iter(|| {
                 init().expect("init failed");
-                update(4096).expect("update failed");
+                for _ in 0..*itrs {
+                    update(4096).expect("update failed");
+                }
                 fin().expect("final failed");
             })
         });
@@ -54,8 +56,8 @@ macro_rules! sha256 {
 }
 
 macro_rules! salsa20 {
-    ($c:ident, $name:expr, $code:expr) => {
-        $c.bench_function($name, |b| {
+    ($grp:ident, $name:expr, $code:expr, $itrs:expr) => {
+        $grp.bench_with_input(BenchmarkId::new($name, $itrs), $itrs, |b, itrs| {
             let store = Store::default();
 
             let module = Module::new(store.engine(), $code).unwrap();
@@ -97,24 +99,91 @@ macro_rules! salsa20 {
             b.iter(|| {
                 keysetup(k[0], k[1], k[2], k[3], k[4], k[5], k[6], k[7]).expect("keysetup failed");
                 noncesetup(nonce[0], nonce[1]).expect("noncesetup failed");
-                encrypt(4096).expect("encrypt failed");
+                for _ in 0..*itrs {
+                    encrypt(4096).expect("encrypt failed");
+                }
             })
         });
     }
 }
 
-fn criterion_benchmark(c: &mut Criterion) {
-    let sec_sha256 = include_str!("../wasm/sec_sha256.wat"); 
-    let pub_sha256 = include_str!("../wasm/pub_sha256.wat");
-    let sec_salsa20 = include_str!("../wasm/sec_salsa20.wat"); 
-    let pub_salsa20 = include_str!("../wasm/pub_salsa20.wat");
-    
-    sha256!(c, "sec_sha256", sec_sha256);
-    sha256!(c, "pub_sha256", pub_sha256);
+macro_rules! tea {
+    ($grp:ident, $name:expr, $code:expr, $itrs:expr) => {
+        $grp.bench_with_input(BenchmarkId::new($name, $itrs), $itrs, |b, itrs| {
+            let store = Store::default();
 
-    salsa20!(c, "sec_salsa20", sec_salsa20);
-    salsa20!(c, "pub_salsa20", pub_salsa20);
+            let module = Module::new(store.engine(), $code).unwrap();
+            let memory = Memory::new(&store, MemoryType::new(Limits::new(2, None)));
+
+            unsafe {
+                let mem = memory.data_unchecked_mut();
+                let mut rng = rand::thread_rng();
+
+                for i in 0..24 {
+                    mem[i] = rng.gen();
+                }
+            }
+
+            let instance = Instance::new(&store, &module, &[memory.into()]).unwrap();
+
+            let encrypt = instance.get_func("encrypt").unwrap()
+                .get0::<()>().unwrap();
+            let decrypt = instance.get_func("decrypt").unwrap()
+                .get0::<()>().unwrap();
+            
+            b.iter(|| {
+                for _ in 0..*itrs{
+                    encrypt().expect("encrypt failed");
+                    decrypt().expect("decrypt failed");
+                }
+            })
+        });
+    }
 }
 
-criterion_group!(benches, criterion_benchmark);
+const SAMPLE_SIZE: usize = 10;
+
+fn sha256_bench(c: &mut Criterion) {
+    let sec_sha256 = include_str!("../wasm/sec_sha256.wat"); 
+    let pub_sha256 = include_str!("../wasm/pub_sha256.wat");
+
+    let mut sha256 = c.benchmark_group("sha256");
+
+    sha256.sample_size(SAMPLE_SIZE);
+
+    for i in 0..10 {
+        sha256!(sha256, "sec_sha256", sec_sha256, &i);
+        sha256!(sha256, "pub_sha256", pub_sha256, &i);
+    }
+}
+
+fn salsa20_bench(c: &mut Criterion) {
+    let sec_salsa20 = include_str!("../wasm/sec_salsa20.wat"); 
+    let pub_salsa20 = include_str!("../wasm/pub_salsa20.wat");
+
+    let mut salsa20 = c.benchmark_group("salsa20");
+
+    salsa20.sample_size(SAMPLE_SIZE);
+
+    for i in 0..10 {
+        salsa20!(salsa20, "sec_salsa20", sec_salsa20, &i);
+        salsa20!(salsa20, "pub_salsa20", pub_salsa20, &i);
+    }
+}
+
+fn tea_bench(c: &mut Criterion) {
+    let sec_tea = include_str!("../wasm/sec_tea.wat");
+    let pub_tea = include_str!("../wasm/pub_tea.wat");
+
+    let mut tea = c.benchmark_group("tea");
+
+    tea.sample_size(SAMPLE_SIZE);
+
+    for i in 0..10 {
+        tea!(tea, "sec_tea", sec_tea, &i);
+        tea!(tea, "pub_tea", pub_tea, &i);
+    }
+}
+
+criterion_group!(benches, sha256_bench, salsa20_bench, tea_bench);
 criterion_main!(benches);
