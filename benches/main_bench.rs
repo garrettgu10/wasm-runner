@@ -364,5 +364,6 @@ fn compile_bench(c: &mut Criterion) {
 }
 
 //criterion_group!(benches, sha256_bench, salsa20_bench, tea_bench);
-criterion_group!(benches, tea_fact_bench);
+//criterion_group!(benches, tea_fact_bench);
+criterion_group!(benches, salsa20_fact_bench);
 criterion_main!(benches);
